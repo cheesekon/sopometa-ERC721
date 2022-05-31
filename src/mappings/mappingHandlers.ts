@@ -1,30 +1,28 @@
-import {Approval, Transaction} from "../types";
-import { FrontierEvmEvent, FrontierEvmCall } from '@subql/contract-processors/dist/frontierEvm';
+import { Transaction } from '../types'
+import { FrontierEvmEvent, FrontierEvmCall } from '@subql/contract-processors/dist/frontierEvm'
 
-import { BigNumber } from "ethers";
+import { BigNumber } from 'ethers'
+
+import { AddressZero } from '../const'
 
 // Setup types from ABI
-type TransferEventArgs = [string, string, BigNumber] & { from: string; to: string; value: BigNumber; };
-type ApproveCallArgs = [string, BigNumber] & { _spender: string; _value: BigNumber; }
+type TransferEventArgs = [string, string, BigNumber] & { from: string; to: string; tokenId: BigNumber }
 
-export async function handleFrontierEvmEvent(event: FrontierEvmEvent<TransferEventArgs>): Promise<void> {
-    const transaction = new Transaction(event.transactionHash);
+export async function handleTransferEvent(event: FrontierEvmEvent<TransferEventArgs>): Promise<void> {
+  const { tokenId, from, to } = event.args
 
-    transaction.value = event.args.value.toBigInt();
-    transaction.from = event.args.from;
-    transaction.to = event.args.to;
-    transaction.contractAddress = event.address;
+  if (from.toLowerCase() === AddressZero.toLowerCase()) {
+    // Mint NFT
+    const transaction = new Transaction(tokenId.toString())
 
-    await transaction.save();
-}
+    transaction.tokenId = tokenId.toBigInt()
+    transaction.from = from
+    transaction.to = to
+    transaction.contractAddress = event.address
 
-export async function handleFrontierEvmCall(event: FrontierEvmCall<ApproveCallArgs>): Promise<void> {
-    const approval = new Approval(event.hash);
-
-    approval.owner = event.from;
-    approval.value = event.args._value.toBigInt();
-    approval.spender = event.args._spender;
-    approval.contractAddress = event.to;
-
-    await approval.save();
+    await transaction.save()
+  } else if (to.toLowerCase() === AddressZero.toLowerCase()) {
+    // Burn NFT
+    Transaction.remove(tokenId.toString())
+  }
 }
